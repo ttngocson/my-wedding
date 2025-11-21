@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Son & Thao Wedding</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            background: #222;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, .4);
+        }
+
+        select {
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: #333;
+            color: white;
+            border: none;
+            margin-left: 4px;
+        }
+
+        .slideshow {
+            position: relative;
+            height: 70vh;
+            background: black;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+
+        .slide-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: transform .5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity .5s ease-out;
+        }
+
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            border-radius: 50%;
+            padding: 8px 12px;
+            font-size: 28px;
+            background: rgba(0, 0, 0, .5);
+            color: white;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .nav-prev {
+            left: 10px
+        }
+
+        .nav-next {
+            right: 10px
+        }
+
+        .thumbs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        .thumbs img {
+            height: 60px;
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: .6;
+            transition: .2s;
+        }
+
+        .thumbs img.active {
+            opacity: 1;
+            transform: scale(1.05);
+            box-shadow: 0 0 0 2px white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Son & Thao Wedding</h2>
+
+        Album:
+        <select id="albumSelect"></select>
+
+        <div class="slideshow">
+            <button class="nav-btn nav-prev">&#10094;</button>
+
+            <img id="imgA" class="slide-img" alt="">
+            <img id="imgB" class="slide-img" alt="">
+
+            <button class="nav-btn nav-next">&#10095;</button>
+        </div>
+
+        <div id="caption" style="margin-top:8px; opacity:.8;"></div>
+        <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <script>
+        // albums = { "Pre wedding": ["SUR_8634.jpg", ...], "Album2":[...], ... }
+        let albums = {};
+
+        const albumSelect = document.getElementById("albumSelect");
+        const imgA = document.getElementById("imgA");
+        const imgB = document.getElementById("imgB");
+        const caption = document.getElementById("caption");
+        const thumbs = document.getElementById("thumbs");
+
+        let currentAlbum = "";
+        let images = [];
+        let currentIndex = 0;
+
+        let isAnimating = false;
+        let currentEl = imgA;
+        let bufferEl = imgB;
+
+        // ---------------------------
+        // Đọc & parse file CSV
+        // ---------------------------
+        async function loadCsv() {
+            try {
+                const res = await fetch("albums.csv");
+                if (!res.ok) {
+                    console.error("Không đọc được albums.csv");
+                    caption.textContent = "Không đọc được file albums.csv";
+                    return;
+                }
+                const text = await res.text();
+                parseCSV(text);
+                buildAlbumDropdown();
+            } catch (e) {
+                console.error(e);
+                caption.textContent = "Lỗi khi load file albums.csv";
+            }
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split("\n");
+            if (lines.length <= 1) return;
+
+            lines.shift(); // bỏ dòng header: Album,filename
+
+            albums = {};
+
+            for (let line of lines) {
+                if (!line.trim()) continue;
+                const parts = line.split(",");
+                if (parts.length < 2) continue;
+
+                const album = parts[0].trim();
+                const filename = parts[1].trim();
+
+                if (!albums[album]) albums[album] = [];
+                albums[album].push(filename);
+            }
+        }
+
+        // ---------------------------
+        // Tạo dropdown album
+        // ---------------------------
+        function buildAlbumDropdown() {
+            albumSelect.innerHTML = "";
+
+            const keys = Object.keys(albums);
+            if (keys.length === 0) {
+                caption.textContent = "Không có dữ liệu album trong CSV";
+                return;
+            }
+
+            keys.forEach(name => {
+                const op = document.createElement("option");
+                op.value = name;
+                op.textContent = name;
+                albumSelect.appendChild(op);
+            });
+
+            currentAlbum = keys[0];
+            loadAlbum(currentAlbum);
+        }
+
+        albumSelect.addEventListener("change", () => {
+            loadAlbum(albumSelect.value);
+        });
+
+        // ---------------------------
+        // Load 1 album
+        // ---------------------------
+        function loadAlbum(name) {
+            currentAlbum = name;
+            images = albums[name] || [];
+            currentIndex = 0;
+
+            buildThumbs();
+            initSlide();
+        }
+
+        // ---------------------------
+        // Thumbnails
+        // ---------------------------
+        function buildThumbs() {
+            thumbs.innerHTML = "";
+
+            images.forEach((filename, idx) => {
+                const t = document.createElement("img");
+                t.src = `images/${currentAlbum}/${filename}`;
+                t.alt = filename;
+                t.onclick = () => goTo(idx, idx > currentIndex ? "right" : "left");
+                thumbs.appendChild(t);
+            });
+        }
+
+        function highlightThumb() {
+            thumbs.querySelectorAll("img").forEach((t, i) => {
+                t.classList.toggle("active", i === currentIndex);
+            });
+        }
+
+        // ---------------------------
+        // Khởi tạo slide đầu tiên
+        // ---------------------------
+        function initSlide() {
+            if (!images.length) {
+                imgA.style.opacity = 0;
+                imgB.style.opacity = 0;
+                caption.textContent = "Album này không có ảnh";
+                return;
+            }
+
+            currentEl = imgA;
+            bufferEl = imgB;
+
+            currentEl.style.transition = "none";
+            bufferEl.style.transition = "none";
+
+            currentEl.src = `images/${currentAlbum}/${images[0]}`;
+            currentEl.style.transform = "translateX(0)";
+            currentEl.style.opacity = 1;
+
+            bufferEl.style.transform = "translateX(100%)";
+            bufferEl.style.opacity = 0;
+
+            caption.textContent = images[0];
+            highlightThumb();
+        }
+
+        // ---------------------------
+        // Hiệu ứng slide full màn hình
+        // ---------------------------
+        function goTo(index, direction = "right") {
+            if (isAnimating || !images.length) return;
+
+            const nextIndex = (index + images.length) % images.length;
+            if (nextIndex === currentIndex) return;
+
+            isAnimating = true;
+
+            const fromEl = currentEl;
+            const toEl = bufferEl;
+
+            const offsetIn = direction === "right" ? 100 : -100;
+            const offsetOut = -offsetIn;
+
+            fromEl.style.transition = "none";
+            toEl.style.transition = "none";
+
+            toEl.src = `images/${currentAlbum}/${images[nextIndex]}`;
+
+            fromEl.style.transform = "translateX(0%)";
+            toEl.style.transform = `translateX(${offsetIn}%)`;
+            toEl.style.opacity = 1;
+
+            void toEl.offsetWidth; // force reflow
+
+            const easing = "cubic-bezier(0.22,0.61,0.36,1)";
+            const duration = 500;
+
+            fromEl.style.transition = `transform ${duration}ms ${easing}, opacity ${duration}ms`;
+            toEl.style.transition = `transform ${duration}ms ${easing}, opacity ${duration}ms`;
+
+            fromEl.style.transform = `translateX(${offsetOut}%)`;
+            fromEl.style.opacity = 0.2;
+
+            toEl.style.transform = "translateX(0%)";
+            toEl.style.opacity = 1;
+
+            fromEl.addEventListener("transitionend", function done() {
+                fromEl.removeEventListener("transitionend", done);
+
+                fromEl.style.transition = "none";
+                fromEl.style.opacity = 0;
+                fromEl.style.transform = `translateX(${offsetIn}%)`;
+
+                currentIndex = nextIndex;
+                caption.textContent = images[currentIndex];
+                highlightThumb();
+
+                currentEl = toEl;
+                bufferEl = fromEl;
+
+                isAnimating = false;
+            });
+        }
+
+        document.querySelector(".nav-prev").onclick = () => goTo(currentIndex - 1, "left");
+        document.querySelector(".nav-next").onclick = () => goTo(currentIndex + 1, "right");
+
+        // ---------------------------
+        // Bắt đầu: load CSV khi trang sẵn sàng
+        // ---------------------------
+        document.addEventListener("DOMContentLoaded", () => {
+            loadCsv();
+        });// ---------------------------
+        // Vuốt để chuyển ảnh
+        // ---------------------------
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        const swipeZone = document.querySelector(".slideshow");
+
+        swipeZone.addEventListener("touchstart", (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        swipeZone.addEventListener("touchend", (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            const swipeDistance = touchEndX - touchStartX;
+
+            if (Math.abs(swipeDistance) < 50) return; // bỏ vuốt nhẹ
+
+            // Vuốt sang phải → xem ảnh trước
+            if (swipeDistance > 50) {
+                goTo(currentIndex - 1, "left");
+            }
+            // Vuốt sang trái → xem ảnh kế
+            else if (swipeDistance < -50) {
+                goTo(currentIndex + 1, "right");
+            }
+        }
+
+    </script>
+</body>
+
+</html>
