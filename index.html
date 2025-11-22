@@ -133,6 +133,8 @@
 
         // albums = { "Pre wedding": ["SUR_8634.jpg", ...], "Album2": [...] }
         let albums = {};
+        // Preload cache cho ảnh
+        const preloadCache = {};
 
         const albumSelect = document.getElementById("albumSelect");
         const imgA = document.getElementById("imgA");
@@ -251,6 +253,7 @@
 
             buildThumbsFromScratch();
             initSlide();
+            preloadAround(0);
         }
 
         // ---------------------------
@@ -381,6 +384,8 @@
             if (nextIndex >= images.length) nextIndex = images.length - 1;
             if (nextIndex === currentIndex) return;
 
+            preloadAround(nextIndex);
+
             isAnimating = true;
 
             const fromEl = currentEl;
@@ -437,6 +442,7 @@
 
                 // Sau khi chuyển xong 1 ảnh, check xem có cần load thêm batch không
                 maybeLoadMore();
+                preloadAround(currentIndex);
             });
         }
 
@@ -497,6 +503,38 @@
             }
         });
 
+        // ---------------------------
+        // Preload cache cho ảnh
+        // ---------------------------
+        function preloadImage(src) {
+            if (!src) return;
+            if (preloadCache[src]) return; // đã preload rồi
+
+            const img = new Image();
+            img.src = src;
+            preloadCache[src] = true;
+        }
+
+        // Preload quanh 1 index (trong toàn bộ album)
+        function preloadAround(index) {
+            const all = albums[currentAlbum] || [];
+            if (!all.length) return;
+
+            const toPreloadIndices = [
+                index,
+                index + 1,
+                index + 2,
+                index - 1
+            ];
+
+            toPreloadIndices.forEach(i => {
+                if (i >= 0 && i < all.length) {
+                    const filename = all[i];
+                    const path = `images/${currentAlbum}/${filename}`;
+                    preloadImage(path);
+                }
+            });
+        }
 
         // ---------------------------
         // Bắt đầu: load CSV khi trang sẵn sàng
