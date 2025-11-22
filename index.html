@@ -83,6 +83,7 @@
             display: flex;
             gap: 8px;
             overflow-x: auto;
+            overflow-y: hidden;
             margin-top: 10px;
         }
 
@@ -277,11 +278,33 @@
             });
         }
 
-        function highlightThumb() {
+        function highlightThumb(activeIndex = currentIndex) {
             thumbs.querySelectorAll("img").forEach((t, i) => {
-                t.classList.toggle("active", i === currentIndex);
+                t.classList.toggle("active", i === activeIndex);
             });
         }
+
+
+        function scrollThumbIntoView(index) {
+            const thumbItems = thumbs.querySelectorAll("img");
+            const item = thumbItems[index];
+            if (!item) return;
+
+            const container = thumbs;
+
+            const itemLeft = item.offsetLeft;
+            const itemWidth = item.offsetWidth;
+            const containerWidth = container.clientWidth;
+
+            // Scroll để thumbnail nằm giữa thanh cuộn
+            const scrollTo = itemLeft - (containerWidth / 2) + (itemWidth / 2);
+
+            container.scrollTo({
+                left: scrollTo,
+                behavior: "smooth"
+            });
+        }
+
 
         // ---------------------------
         // Khởi tạo slide đầu tiên
@@ -305,27 +328,46 @@
             currentIndex = 0;
             caption.textContent = images[0];
             highlightThumb();
+            scrollThumbIntoView(currentIndex);
             updateCounter();
         }
 
         // ---------------------------
         // Tự load thêm batch (20 ảnh) khi gần cuối
         // ---------------------------
+        let isLoadingMore = false;
         function maybeLoadMore() {
             const all = albums[currentAlbum] || [];
             if (images.length >= all.length) return; // đã load hết
+            if (isLoadingMore) return;               // đang load, không load tiếp
 
-            // nếu chưa tới 5 ảnh cuối thì thôi
-            if (currentIndex < images.length - PREFETCH_BEFORE_END) return;
+            // Chỉ load khi còn <= PREFETCH_BEFORE_END ảnh
+            const needPrefetch =
+                currentIndex >= images.length - PREFETCH_BEFORE_END;
 
+            // Hoặc người dùng scroll đến cuối thumbnails
+            const scrolledToEnd =
+                thumbs.scrollLeft >= thumbs.scrollWidth - thumbs.clientWidth - 50;
+
+            if (!needPrefetch && !scrolledToEnd) return;
+
+            isLoadingMore = true;
+
+            // Load thêm batch 20
             const remaining = all.length - images.length;
             const count = Math.min(BATCH_SIZE, remaining);
+
             const start = images.length;
             const newFiles = all.slice(start, start + count);
 
             images = images.concat(newFiles);
+
+            // Gắn thumbnail mới
             appendThumbs(newFiles, start);
+
+            isLoadingMore = false;
         }
+
 
         // ---------------------------
         // Hiệu ứng slide full màn hình
@@ -343,6 +385,11 @@
 
             const fromEl = currentEl;
             const toEl = bufferEl;
+
+            // 🔹 Đổi highlight & scroll thumbnail NGAY khi animation bắt đầu
+            highlightThumb(nextIndex);
+            scrollThumbIntoView(nextIndex);
+
 
             const offsetIn = direction === "right" ? 100 : -100;
             const offsetOut = -offsetIn;
@@ -379,7 +426,7 @@
 
                 currentIndex = nextIndex;
                 caption.textContent = images[currentIndex];
-                highlightThumb();
+                scrollThumbIntoView(currentIndex);
                 updateCounter();
 
                 // Đảo role 2 img
@@ -429,6 +476,27 @@
         //         goTo(currentIndex + 1, "right");
         //     }
         // }
+
+        // ---------------------------
+        // Auto loadmore khi scroll thumbnail tới cuối
+        // ---------------------------
+        // Horizontal scrolling bằng con lăn chuột
+        thumbs.addEventListener('wheel', (e) => {
+            // Nếu cuộn dọc nhiều hơn ngang thì chuyển nó thành scrollLeft
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault(); // chặn scroll dọc mặc định
+                thumbs.scrollLeft += e.deltaY; // dùng deltaY để cuộn ngang
+            }
+        }, { passive: false });
+
+        thumbs.addEventListener("scroll", () => {
+            const nearEnd = thumbs.scrollWidth - thumbs.clientWidth - 50;
+            console.log('nearEnd', nearEnd, 'scrollLeft', thumbs.scrollLeft);
+            if (thumbs.scrollLeft >= nearEnd) {
+                maybeLoadMore();
+            }
+        });
+
 
         // ---------------------------
         // Bắt đầu: load CSV khi trang sẵn sàng
