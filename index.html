@@ -57,6 +57,12 @@
             transition: transform .5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity .5s ease-out;
         }
 
+        .hide-nav .nav-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
         .nav-btn {
             position: absolute;
             top: 50%;
@@ -69,6 +75,7 @@
             color: white;
             cursor: pointer;
             z-index: 10;
+            transition: opacity 0.3s;
         }
 
         .nav-prev {
@@ -149,6 +156,22 @@
         let isAnimating = false;
         let currentEl = imgA;
         let bufferEl = imgB;
+        let navHidden = false;
+
+        function hideNav() {
+            navHidden = true;
+            document.querySelector(".slideshow").classList.add("hide-nav");
+        }
+
+        function showNav() {
+            navHidden = false;
+            document.querySelector(".slideshow").classList.remove("hide-nav");
+        }
+
+        function toggleNav() {
+            navHidden ? showNav() : hideNav();
+        }
+
 
         // ---------------------------
         // Đọc & parse file CSV
@@ -265,7 +288,10 @@
                 const t = document.createElement("img");
                 t.src = `images/${currentAlbum}/${filename}`;
                 t.alt = filename;
-                t.onclick = () => goTo(idx, idx > currentIndex ? "right" : "left");
+                t.onclick = () => {
+                    goTo(idx, idx > currentIndex ? "right" : "left");
+                    hideNav();
+                };
                 thumbs.appendChild(t);
             });
         }
@@ -447,19 +473,32 @@
         }
 
         // Nút điều hướng
-        document.querySelector(".nav-prev").onclick = () => {
+        const btnPrev = document.querySelector(".nav-prev");
+        const btnNext = document.querySelector(".nav-next");
+
+        // Không cho click lan ra slideshow
+        btnPrev.addEventListener('click', (e) => {
+            e.stopPropagation();   // 🔥 Quan trọng
+            showNav();             // nav luôn hiện
             goTo(currentIndex - 1, "left");
-        };
-        document.querySelector(".nav-next").onclick = () => {
+        });
+
+        btnNext.addEventListener('click', (e) => {
+            e.stopPropagation();   // 🔥 Quan trọng
+            showNav();             // nav luôn hiện
             goTo(currentIndex + 1, "right");
-        };
+        });
+
 
         // ---------------------------
         // Vuốt để chuyển ảnh
         // ---------------------------
         // let touchStartX = 0;
         // let touchEndX = 0;
-        // const swipeZone = document.querySelector(".slideshow");
+        const swipeZone = document.querySelector(".slideshow");
+        swipeZone.addEventListener("click", () => {
+            toggleNav();
+        });
 
         // swipeZone.addEventListener("touchstart", (e) => {
         //     touchStartX = e.changedTouches[0].screenX;
